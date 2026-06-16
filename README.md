@@ -1,12 +1,13 @@
-# AIFA Backend — Phase 1 Foundation
+# AIFA Backend
 
-Personal finance tracker API for Rwanda (no AI in Phase 1).
+Personal finance tracker API for Rwanda with rule-based insights and AI chat orchestration.
 
 ## Stack
 
-- Java 21, Spring Boot 3.3
+- Java 21, Spring Boot 3.3 (`aifa-api`)
+- Python 3.12, FastAPI (`aifa-orchestrator`)
 - PostgreSQL 16 + Flyway
-- Redis 7 (configured, minimal Phase 1 use)
+- Redis 7 (rate limits, chat session context)
 - JWT authentication (access 15 min, refresh 7 days)
 
 ## Prerequisites
@@ -62,6 +63,8 @@ mvn verify -Pintegration
 | Import | `POST /import/sms`, `POST /import/sms/confirm` |
 | Insights | `GET /insights/spending-analysis`, `GET /insights/health-score`, `POST /insights/affordability`, `GET /insights/recommendations` |
 | Dashboard | `GET /dashboard/summary` |
+| Users | `GET /users/me`, `PATCH /users/me` |
+| Chat (orchestrator) | `POST /chat` on port 8000 — see [CHAT_API.md](CHAT_API.md) |
 
 All endpoints except auth register/login/refresh require `Authorization: Bearer <access_token>`.
 
@@ -95,6 +98,9 @@ curl -s -X POST http://localhost:8080/api/v1/transactions \
 | `AIFA_JWT_SECRET` | dev placeholder in `application.yaml` | HMAC secret (min 256 bits) |
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/aifa` | Database URL |
 | `SPRING_DATA_REDIS_HOST` | `localhost` | Redis host |
+| `OPENAI_API_KEY` | — | Smart mode LLM (orchestrator) |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Private mode LLM |
+| `AI_DAILY_LIMIT` | `20` | Chat queries per user per day |
 
 ## Project structure
 
@@ -102,27 +108,52 @@ curl -s -X POST http://localhost:8080/api/v1/transactions \
 aifa-api/src/main/java/com/aifa/
   shared/          # security, money, exceptions, config
   modules/
-    iam/           # auth
+    iam/           # auth, user profile
     ledger/        # wallets, transactions, categories
     planning/      # budgets, goals
     importing/     # MoMo SMS import
     dashboard/     # summary
     insights/      # health score, spending analysis, affordability, recommendations
+
+aifa-orchestrator/app/
+  routes/          # POST /api/v1/chat
+  intent/          # rule-based classifier
+  engine/          # httpx client → Java API
+  llm/             # OpenAI + Ollama router
+  validator/       # hallucination guardrails
+  session/         # Redis rate limit + chat history
 ```
 
-## Phase 1 notes
+## Phase 3 — AI Orchestrator
+
+```bash
+# Start infra (postgres, redis, ollama)
+docker compose up -d
+
+# Java API
+cd aifa-api && mvn spring-boot:run
+
+# Orchestrator
+cd aifa-orchestrator
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+Or run orchestrator via Docker (expects Java API on host port 8080):
+
+```bash
+docker compose up -d aifa-orchestrator
+```
+
+Copy `.env.example` to `.env` and set `OPENAI_API_KEY` for Smart mode.
+
+Full chat API contract: [CHAT_API.md](CHAT_API.md)
+
+## Phase notes
 
 - Money stored as `BIGINT` RWF integers (no decimals)
 - Wallet balance is materialized from the transaction ledger atomically
-- System categories seeded: food, transport, rent, utilities, entertainment, health, savings, other
 - MoMo SMS parser version: `mtn_momo_v1`
 - Errors return RFC 7807 `ProblemDetail`
-
-## Follow-up (Phase 2+)
-
-- Financial Health Score
-- Affordability engine
-- AI orchestrator (Python)
-- Redis session context & rate limiting
-- Merchant lookup enrichment
-- PATCH wallet/budget endpoints
+- Health score requires ~30 days of transaction history
+- Chat: 20 queries/user/day; LLM responses validated against engine data

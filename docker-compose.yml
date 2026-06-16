@@ -27,5 +27,33 @@ services:
       timeout: 3s
       retries: 10
 
+  aifa-orchestrator:
+    build:
+      context: ./aifa-orchestrator
+    container_name: aifa-orchestrator
+    ports:
+      - "8000:8000"
+    environment:
+      AIFA_API_BASE_URL: http://host.docker.internal:8080
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      AI_DAILY_LIMIT: 20
+      ENABLE_LLM: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: aifa-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
 volumes:
   aifa_pg_data:
+  ollama_data:
