@@ -1,0 +1,4 @@
+.maven/
+aifa-api/target/
+.idea/
+*.iml

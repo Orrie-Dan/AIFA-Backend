@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aifa_test
+    username: aifa
+    password: aifa_test
+  jpa:
+    show-sql: false
+  flyway:
+    enabled: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+
+aifa:
+  jwt:
+    secret: test-secret-key-with-at-least-256-bits-for-hmac-sha256-algorithm
+
+logging:
+  level:
+    root: WARN
+    com.aifa: INFO

@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: aifa-api
+  profiles:
+    active: dev
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+aifa:
+  jwt:
+    secret: ${AIFA_JWT_SECRET:change-me-in-production-use-at-least-256-bits-secret-key-here}
+    access-token-expiration-minutes: 15
+    refresh-token-expiration-days: 7
+  insights:
+    health-score-cron: "0 0 2 * * *"
