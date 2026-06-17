@@ -7,27 +7,18 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
+public interface TransactionRepository extends JpaRepository<Transaction, UUID>, JpaSpecificationExecutor<Transaction> {
 
     Optional<Transaction> findByIdAndUserId(UUID id, UUID userId);
 
-    @Query("""
-            SELECT t FROM Transaction t
-            WHERE t.userId = :userId
-              AND (:from IS NULL OR t.transactionAt >= :from)
-              AND (:to IS NULL OR t.transactionAt <= :to)
-              AND (:categoryId IS NULL OR t.categoryId = :categoryId)
-            ORDER BY t.transactionAt DESC
-            """)
-    Page<Transaction> findFiltered(
-            @Param("userId") UUID userId,
-            @Param("from") Instant from,
-            @Param("to") Instant to,
-            @Param("categoryId") UUID categoryId,
-            Pageable pageable);
+    default Page<Transaction> findFiltered(
+            UUID userId, Instant from, Instant to, UUID categoryId, Pageable pageable) {
+        return findAll(TransactionSpecifications.filtered(userId, from, to, categoryId), pageable);
+    }
 
     @Query("""
             SELECT COALESCE(SUM(ABS(t.amountRwf)), 0) FROM Transaction t

@@ -1,14 +1,11 @@
 package com.aifa;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -17,7 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @AutoConfigureMockMvc
-class LedgerIntegrationTest extends AbstractIntegrationTest {
+class SmsImportIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -26,8 +23,8 @@ class LedgerIntegrationTest extends AbstractIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void registerCreateWalletAddTransactionUpdatesBalance() throws Exception {
-        String email = "ledger" + System.nanoTime() + "@aifa.test";
+    void previewPersistsOutDirection() throws Exception {
+        String email = "sms-import" + System.nanoTime() + "@aifa.test";
 
         MvcResult register = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -37,8 +34,10 @@ class LedgerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn();
 
-        JsonNode auth = objectMapper.readTree(register.getResponse().getContentAsString());
-        String accessToken = auth.get("accessToken").asText();
+        String accessToken = objectMapper
+                .readTree(register.getResponse().getContentAsString())
+                .get("accessToken")
+                .asText();
 
         MvcResult walletResult = mockMvc.perform(post("/api/v1/wallets")
                         .header("Authorization", "Bearer " + accessToken)
@@ -54,34 +53,17 @@ class LedgerIntegrationTest extends AbstractIntegrationTest {
                 .get("id")
                 .asText();
 
-        mockMvc.perform(post("/api/v1/transactions")
+        mockMvc.perform(post("/api/v1/import/sms")
                         .header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "walletId":"%s",
-                                  "amountRwf":50000,
-                                  "type":"income",
-                                  "description":"Test deposit",
-                                  "transactionAt":"%s"
+                                  "messages":"*165*S*1500 RWF transferred to Jack TURIKUMANA (250783955909) at 2026-06-01 07:16:12. Fee: 100 RWF. Your new balance is RWF 4383"
                                 }
-                                """.formatted(walletId, Instant.now().toString())))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(get("/api/v1/wallets").header("Authorization", "Bearer " + accessToken))
+                                """.formatted(walletId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].balanceRwf").value(50000));
-
-        mockMvc.perform(get("/api/v1/transactions").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].amountRwf").value(50000));
-
-        MvcResult dashboard = mockMvc.perform(get("/api/v1/dashboard/summary")
-                        .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        JsonNode summary = objectMapper.readTree(dashboard.getResponse().getContentAsString());
-        assertThat(summary.get("totalBalanceRwf").asLong()).isEqualTo(50000L);
+                .andExpect(jsonPath("$.rows[0].direction").value("OUT"))
+                .andExpect(jsonPath("$.rows[0].amountRwf").value(1600));
     }
 }

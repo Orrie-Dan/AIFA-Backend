@@ -19,7 +19,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,8 +58,14 @@ public class TransactionService {
     @Transactional(readOnly = true)
     public Page<TransactionResponse> listTransactions(
             UUID userId, Instant from, Instant to, UUID categoryId, Pageable pageable) {
+        Pageable sorted = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(
+                        pageable.getPageNumber(),
+                        pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "transactionAt"));
         return transactionRepository
-                .findFiltered(userId, from, to, categoryId, pageable)
+                .findFiltered(userId, from, to, categoryId, sorted)
                 .map(this::toResponse);
     }
 
