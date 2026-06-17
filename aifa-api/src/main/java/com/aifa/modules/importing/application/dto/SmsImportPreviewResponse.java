@@ -10,4 +10,6 @@ public record SmsImportPreviewResponse(
         SmsImportStatus status,
         String parserVersion,
         List<ParsedSmsRow> rows,
-        Instant createdAt) {}
+        Instant createdAt,
+        Long suggestedOpeningBalanceRwf,
+        Integer anchorRowIndex) {}

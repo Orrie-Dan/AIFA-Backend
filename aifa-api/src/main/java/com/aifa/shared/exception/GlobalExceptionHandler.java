@@ -19,6 +19,9 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Resource Not Found");
         problem.setType(URI.create("https://aifa.rw/problems/not-found"));
+        if (ex.getCode() != null) {
+            problem.setProperty("code", ex.getCode());
+        }
         return problem;
     }
 
@@ -35,6 +38,9 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setTitle("Bad Request");
         problem.setType(URI.create("https://aifa.rw/problems/bad-request"));
+        if (ex.getCode() != null) {
+            problem.setProperty("code", ex.getCode());
+        }
         return problem;
     }
 

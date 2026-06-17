@@ -3,6 +3,7 @@ package com.aifa.modules.importing.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifa.modules.importing.application.dto.ParsedSmsRow;
+import com.aifa.shared.exception.ErrorCode;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,7 @@ class SmsParseServiceTest {
         assertThat(row.amountRwf()).isEqualTo(50_000L);
         assertThat(row.counterpartyName()).isEqualTo("JOHN DOE");
         assertThat(row.balanceRwf()).isEqualTo(1_250_000L);
-        assertThat(row.direction()).isEqualTo("credit");
+        assertThat(row.direction()).isEqualTo("IN");
         assertThat(row.phoneHash()).isNotBlank();
     }
 
@@ -39,7 +40,7 @@ class SmsParseServiceTest {
         assertThat(row.parsed()).isTrue();
         assertThat(row.amountRwf()).isEqualTo(25_000L);
         assertThat(row.counterpartyName()).isEqualTo("MARY SMITH");
-        assertThat(row.direction()).isEqualTo("debit");
+        assertThat(row.direction()).isEqualTo("OUT");
     }
 
     @Test
@@ -50,6 +51,15 @@ class SmsParseServiceTest {
 
         assertThat(rows).hasSize(1);
         assertThat(rows.getFirst().parsed()).isFalse();
-        assertThat(rows.getFirst().parseError()).contains("mtn_momo_v1");
+        assertThat(rows.getFirst().parseError()).contains("mtn_momo_v2");
+    }
+
+    @Test
+    void returnsAirtelErrorCode() {
+        String sms = "Airtel Money: Payment of RWF 5000 to Shop was successful.";
+
+        List<ParsedSmsRow> rows = smsParseService.parseBatch(sms, Instant.now());
+
+        assertThat(rows.getFirst().parseError()).isEqualTo(ErrorCode.AIRTEL_NOT_SUPPORTED_FOR_MTN_WALLET);
     }
 }

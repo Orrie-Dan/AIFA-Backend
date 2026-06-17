@@ -71,4 +71,10 @@ public class Transaction {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
+
+    @Column(name = "external_ref")
+    private String externalRef;
+
+    @Column(name = "reconciled_balance_rwf")
+    private Long reconciledBalanceRwf;
 }

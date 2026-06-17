@@ -16,6 +16,7 @@ import com.aifa.shared.exception.ResourceNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,22 +68,7 @@ public class TransactionService {
                 .findByIdAndUserId(request.walletId(), userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
-        CategorySource categorySource = CategorySource.uncategorized;
-        UUID resolvedCategoryId = request.categoryId();
-        if (resolvedCategoryId != null) {
-            categoryRepository
-                    .findById(resolvedCategoryId)
-                    .filter(category -> category.getUserId() == null || category.getUserId().equals(userId))
-                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
-            categorySource = CategorySource.user;
-        } else if (request.merchantName() != null && !request.merchantName().isBlank()) {
-            var merchantMatch = merchantLookupService.resolveCategory(request.merchantName());
-            if (merchantMatch.isPresent()) {
-                resolvedCategoryId = merchantMatch.get().categoryId();
-                categorySource = merchantMatch.get().source();
-            }
-        }
-
+        CategoryResolution category = resolveCategory(userId, request.categoryId(), request.merchantName());
         long signedAmount = toSignedAmount(request.amountRwf(), request.type());
 
         Transaction transaction = new Transaction();
@@ -90,8 +76,8 @@ public class TransactionService {
         transaction.setWalletId(request.walletId());
         transaction.setAmountRwf(signedAmount);
         transaction.setType(request.type());
-        transaction.setCategoryId(resolvedCategoryId);
-        transaction.setCategorySource(categorySource);
+        transaction.setCategoryId(category.categoryId());
+        transaction.setCategorySource(category.source());
         transaction.setMerchantName(request.merchantName());
         transaction.setDescription(request.description());
         transaction.setTransactionAt(request.transactionAt());
@@ -99,7 +85,8 @@ public class TransactionService {
         transaction.setCreatedAt(clock.instant());
         transactionRepository.save(transaction);
 
-        walletService.updateBalanceFromLedger(request.walletId(), userId, signedAmount);
+        walletService.applyManualLedgerDelta(
+                request.walletId(), userId, signedAmount, request.transactionAt());
         auditLogger.logAction(userId, "CREATE", "transaction", transaction.getId().toString());
         return toResponse(transaction);
     }
@@ -113,43 +100,38 @@ public class TransactionService {
             UUID categoryId,
             String merchantName,
             String description,
-            Instant transactionAt) {
-        validateTransactionDate(transactionAt);
+            Instant transactionAt,
+            String externalRef,
+            Long reconciledBalanceRwf) {
         walletRepository
                 .findByIdAndUserId(walletId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
-        CategorySource categorySource = CategorySource.uncategorized;
-        UUID resolvedCategoryId = categoryId;
-        if (resolvedCategoryId != null) {
-            categoryRepository
-                    .findById(resolvedCategoryId)
-                    .filter(category -> category.getUserId() == null || category.getUserId().equals(userId))
-                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
-            categorySource = CategorySource.user;
-        } else if (merchantName != null && !merchantName.isBlank()) {
-            var merchantMatch = merchantLookupService.resolveCategory(merchantName);
-            if (merchantMatch.isPresent()) {
-                resolvedCategoryId = merchantMatch.get().categoryId();
-                categorySource = merchantMatch.get().source();
+        if (externalRef != null) {
+            Optional<Transaction> existing =
+                    transactionRepository.findByWalletIdAndExternalRef(walletId, externalRef);
+            if (existing.isPresent()) {
+                return toResponse(existing.get());
             }
         }
+
+        CategoryResolution category = resolveCategory(userId, categoryId, merchantName);
 
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
         transaction.setWalletId(walletId);
         transaction.setAmountRwf(signedAmount);
         transaction.setType(type);
-        transaction.setCategoryId(resolvedCategoryId);
-        transaction.setCategorySource(categorySource);
+        transaction.setCategoryId(category.categoryId());
+        transaction.setCategorySource(category.source());
         transaction.setMerchantName(merchantName);
         transaction.setDescription(description);
         transaction.setTransactionAt(transactionAt);
         transaction.setSource(TransactionSource.sms_import);
+        transaction.setExternalRef(externalRef);
+        transaction.setReconciledBalanceRwf(reconciledBalanceRwf);
         transaction.setCreatedAt(clock.instant());
         transactionRepository.save(transaction);
-
-        walletService.updateBalanceFromLedger(walletId, userId, signedAmount);
         return toResponse(transaction);
     }
 
@@ -159,9 +141,9 @@ public class TransactionService {
                 .findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
 
-        walletService.updateBalanceFromLedger(
-                transaction.getWalletId(), userId, -transaction.getAmountRwf());
+        UUID walletId = transaction.getWalletId();
         transactionRepository.delete(transaction);
+        walletService.recomputeBalanceCache(walletId, userId);
         auditLogger.logAction(userId, "DELETE", "transaction", transactionId.toString());
     }
 
@@ -182,6 +164,25 @@ public class TransactionService {
         transactionRepository.save(transaction);
         auditLogger.logAction(userId, "UPDATE", "transaction_category", transactionId.toString());
         return toResponse(transaction);
+    }
+
+    private CategoryResolution resolveCategory(UUID userId, UUID categoryId, String merchantName) {
+        CategorySource categorySource = CategorySource.uncategorized;
+        UUID resolvedCategoryId = categoryId;
+        if (resolvedCategoryId != null) {
+            categoryRepository
+                    .findById(resolvedCategoryId)
+                    .filter(category -> category.getUserId() == null || category.getUserId().equals(userId))
+                    .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+            categorySource = CategorySource.user;
+        } else if (merchantName != null && !merchantName.isBlank()) {
+            var merchantMatch = merchantLookupService.resolveCategory(merchantName);
+            if (merchantMatch.isPresent()) {
+                resolvedCategoryId = merchantMatch.get().categoryId();
+                categorySource = merchantMatch.get().source();
+            }
+        }
+        return new CategoryResolution(resolvedCategoryId, categorySource);
     }
 
     private void validateTransactionDate(Instant transactionAt) {
@@ -213,4 +214,6 @@ public class TransactionService {
                 transaction.getSource(),
                 transaction.getCreatedAt());
     }
+
+    private record CategoryResolution(UUID categoryId, CategorySource source) {}
 }

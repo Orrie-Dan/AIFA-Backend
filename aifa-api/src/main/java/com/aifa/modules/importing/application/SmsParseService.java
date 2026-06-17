@@ -1,27 +1,18 @@
 package com.aifa.modules.importing.application;
 
-import com.aifa.modules.iam.application.AuthService;
+import com.aifa.modules.importing.application.MtnMomoSmsParser.ParseResult;
 import com.aifa.modules.importing.application.dto.ParsedSmsRow;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 @Service
 public class SmsParseService {
 
-    public static final String PARSER_VERSION = "mtn_momo_v1";
+    public static final String PARSER_VERSION = MtnMomoSmsParser.PARSER_VERSION;
 
-    private static final Pattern RECEIVED_PATTERN = Pattern.compile(
-            "(?i)You have received RWF\\s*([\\d,]+)\\s+from\\s+(.+?)\\s*\\((\\+?\\d+)\\)\\.?\\s*Your new balance is RWF\\s*([\\d,]+)",
-            Pattern.DOTALL);
-
-    private static final Pattern SENT_PATTERN = Pattern.compile(
-            "(?i)(?:You have (?:transferred|sent)|Payment of) RWF\\s*([\\d,]+)\\s+(?:to|for)\\s+(.+?)(?:\\.|\\s+Your new balance is RWF\\s*([\\d,]+))",
-            Pattern.DOTALL);
+    private final MtnMomoSmsParser mtnMomoSmsParser = new MtnMomoSmsParser();
 
     public List<ParsedSmsRow> parseBatch(String rawMessages, Instant defaultTimestamp) {
         String[] lines = rawMessages.split("\\R");
@@ -49,32 +40,18 @@ public class SmsParseService {
     }
 
     ParsedSmsRow parseSingle(String text, int rowIndex, Instant defaultTimestamp) {
-        Matcher received = RECEIVED_PATTERN.matcher(text);
-        if (received.find()) {
-            long amount = parseAmount(received.group(1));
-            String sender = received.group(2).trim();
-            String phone = received.group(3).trim();
-            long balance = parseAmount(received.group(4));
-            return ParsedSmsRow.success(
-                    rowIndex, text, amount, sender, phone, balance, defaultTimestamp, "credit");
+        ParseResult result = mtnMomoSmsParser.parse(text, defaultTimestamp);
+        if (!result.parsed()) {
+            return ParsedSmsRow.failure(rowIndex, text, result.parseError());
         }
-
-        Matcher sent = SENT_PATTERN.matcher(text);
-        if (sent.find()) {
-            long amount = parseAmount(sent.group(1));
-            String recipient = sent.group(2).trim();
-            Long balance = sent.group(3) != null ? parseAmount(sent.group(3)) : null;
-            return ParsedSmsRow.success(rowIndex, text, amount, recipient, null, balance, defaultTimestamp, "debit");
-        }
-
-        return ParsedSmsRow.failure(rowIndex, text, "SMS format not recognized by " + PARSER_VERSION);
-    }
-
-    private long parseAmount(String raw) {
-        return Long.parseLong(raw.replace(",", ""));
-    }
-
-    String hashPhone(String phone) {
-        return AuthService.hashValue(phone);
+        return ParsedSmsRow.success(
+                rowIndex,
+                text,
+                result.amountRwf(),
+                result.counterpartyName(),
+                result.phone(),
+                result.balanceRwf(),
+                result.transactionAt(),
+                result.direction());
     }
 }

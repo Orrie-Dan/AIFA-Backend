@@ -6,4 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record SmsImportConfirmRequest(
-        @NotNull UUID batchId, @NotEmpty List<Integer> rowIndexes, UUID categoryId) {}
+        @NotNull UUID batchId,
+        @NotEmpty List<Integer> rowIndexes,
+        UUID categoryId,
+        UUID walletId) {}

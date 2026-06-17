@@ -77,6 +77,24 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     @Query("SELECT MIN(t.transactionAt) FROM Transaction t WHERE t.userId = :userId")
     Optional<Instant> findEarliestTransactionAt(@Param("userId") UUID userId);
 
+    @Query("SELECT COALESCE(SUM(t.amountRwf), 0) FROM Transaction t WHERE t.walletId = :walletId")
+    long sumAmountByWalletId(@Param("walletId") UUID walletId);
+
+    @Query("""
+            SELECT COALESCE(SUM(t.amountRwf), 0) FROM Transaction t
+            WHERE t.walletId = :walletId AND t.transactionAt <= :upTo
+            """)
+    long sumAmountByWalletIdUpTo(@Param("walletId") UUID walletId, @Param("upTo") Instant upTo);
+
+    long countByWalletId(UUID walletId);
+
+    boolean existsByWalletIdAndExternalRef(UUID walletId, String externalRef);
+
+    java.util.Optional<Transaction> findByWalletIdAndExternalRef(UUID walletId, String externalRef);
+
+    @Query("SELECT MIN(t.transactionAt) FROM Transaction t WHERE t.walletId = :walletId")
+    Optional<Instant> findEarliestTransactionAtByWalletId(@Param("walletId") UUID walletId);
+
     @Query("SELECT DISTINCT t.userId FROM Transaction t")
     java.util.List<UUID> findDistinctUserIds();
 }

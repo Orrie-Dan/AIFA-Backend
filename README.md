@@ -153,7 +153,7 @@ Full chat API contract: [CHAT_API.md](CHAT_API.md)
 
 - Money stored as `BIGINT` RWF integers (no decimals)
 - Wallet balance is materialized from the transaction ledger atomically
-- MoMo SMS parser version: `mtn_momo_v1`
+- MoMo SMS parser version: `mtn_momo_v2`
 - Errors return RFC 7807 `ProblemDetail`
 - Health score requires ~30 days of transaction history
 - Chat: 20 queries/user/day; LLM responses validated against engine data

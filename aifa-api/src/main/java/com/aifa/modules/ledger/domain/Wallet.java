@@ -39,6 +39,12 @@ public class Wallet {
     @Column(name = "balance_rwf", nullable = false)
     private long balanceRwf = 0L;
 
+    @Column(name = "opening_balance_rwf", nullable = false)
+    private long openingBalanceRwf = 0L;
+
+    @Column(name = "ledger_floor_at", nullable = false)
+    private Instant ledgerFloorAt = Instant.now();
+
     @Column(name = "is_primary", nullable = false)
     private boolean primary;
 
