@@ -1,6 +1,7 @@
 package com.aifa.modules.ledger.infrastructure;
 
 import com.aifa.modules.ledger.domain.Transaction;
+import com.aifa.modules.ledger.domain.TransactionType;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,7 +25,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             SELECT COALESCE(SUM(ABS(t.amountRwf)), 0) FROM Transaction t
             WHERE t.userId = :userId
               AND t.categoryId = :categoryId
-              AND t.type = com.aifa.modules.ledger.domain.TransactionType.expense
+              AND t.type = :type
               AND t.transactionAt >= :from
               AND t.transactionAt < :to
             """)
@@ -32,38 +33,62 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID>,
             @Param("userId") UUID userId,
             @Param("categoryId") UUID categoryId,
             @Param("from") Instant from,
-            @Param("to") Instant to);
+            @Param("to") Instant to,
+            @Param("type") TransactionType type);
+
+    default long sumExpensesForCategory(UUID userId, UUID categoryId, Instant from, Instant to) {
+        return sumExpensesForCategory(userId, categoryId, from, to, TransactionType.expense);
+    }
 
     Page<Transaction> findByUserIdOrderByTransactionAtDesc(UUID userId, Pageable pageable);
 
     @Query("""
             SELECT COALESCE(SUM(t.amountRwf), 0) FROM Transaction t
             WHERE t.userId = :userId
-              AND t.type = com.aifa.modules.ledger.domain.TransactionType.income
+              AND t.type = :type
               AND t.transactionAt >= :from
               AND t.transactionAt < :to
             """)
     long sumIncome(
-            @Param("userId") UUID userId, @Param("from") Instant from, @Param("to") Instant to);
+            @Param("userId") UUID userId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("type") TransactionType type);
+
+    default long sumIncome(UUID userId, Instant from, Instant to) {
+        return sumIncome(userId, from, to, TransactionType.income);
+    }
 
     @Query("""
             SELECT COALESCE(SUM(ABS(t.amountRwf)), 0) FROM Transaction t
             WHERE t.userId = :userId
-              AND t.type = com.aifa.modules.ledger.domain.TransactionType.expense
+              AND t.type = :type
               AND t.transactionAt >= :from
               AND t.transactionAt < :to
             """)
     long sumExpenses(
-            @Param("userId") UUID userId, @Param("from") Instant from, @Param("to") Instant to);
+            @Param("userId") UUID userId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("type") TransactionType type);
+
+    default long sumExpenses(UUID userId, Instant from, Instant to) {
+        return sumExpenses(userId, from, to, TransactionType.expense);
+    }
 
     @Query("""
             SELECT t FROM Transaction t
             WHERE t.userId = :userId
-              AND t.type = com.aifa.modules.ledger.domain.TransactionType.income
+              AND t.type = :type
               AND t.transactionAt >= :from
             ORDER BY t.transactionAt DESC
             """)
-    java.util.List<Transaction> findIncomeSince(@Param("userId") UUID userId, @Param("from") Instant from);
+    java.util.List<Transaction> findIncomeSince(
+            @Param("userId") UUID userId, @Param("from") Instant from, @Param("type") TransactionType type);
+
+    default java.util.List<Transaction> findIncomeSince(UUID userId, Instant from) {
+        return findIncomeSince(userId, from, TransactionType.income);
+    }
 
     @Query("SELECT MIN(t.transactionAt) FROM Transaction t WHERE t.userId = :userId")
     Optional<Instant> findEarliestTransactionAt(@Param("userId") UUID userId);
