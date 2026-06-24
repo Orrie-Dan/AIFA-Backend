@@ -14,7 +14,7 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID> {
 
     @Query("""
             SELECT m FROM Merchant m
-            WHERE :normalizedName LIKE CONCAT('%', m.normalizedName, '%')
+            WHERE LOCATE(m.normalizedName, :normalizedName) > 0
             ORDER BY LENGTH(m.normalizedName) DESC
             """)
     List<Merchant> findMatches(@Param("normalizedName") String normalizedName);

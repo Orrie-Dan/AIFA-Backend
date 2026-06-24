@@ -17,7 +17,7 @@ public interface BudgetRepository extends JpaRepository<Budget, UUID> {
             SELECT b FROM Budget b
             WHERE b.userId = :userId
               AND b.activeFrom <= :date
-              AND (b.activeTo IS NULL OR b.activeTo >= :date)
+              AND COALESCE(b.activeTo, :date) >= :date
             ORDER BY b.activeFrom DESC
             """)
     List<Budget> findActiveForDate(@Param("userId") UUID userId, @Param("date") LocalDate date);
