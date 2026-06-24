@@ -15,26 +15,10 @@ public class SmsParseService {
     private final MtnMomoSmsParser mtnMomoSmsParser = new MtnMomoSmsParser();
 
     public List<ParsedSmsRow> parseBatch(String rawMessages, Instant defaultTimestamp) {
-        String[] lines = rawMessages.split("\\R");
+        List<String> messages = SmsMessageSplitter.split(rawMessages);
         List<ParsedSmsRow> rows = new ArrayList<>();
-        int index = 0;
-        StringBuilder buffer = new StringBuilder();
-
-        for (String line : lines) {
-            if (line.isBlank()) {
-                if (!buffer.isEmpty()) {
-                    rows.add(parseSingle(buffer.toString().trim(), index++, defaultTimestamp));
-                    buffer.setLength(0);
-                }
-                continue;
-            }
-            if (!buffer.isEmpty()) {
-                buffer.append(' ');
-            }
-            buffer.append(line.trim());
-        }
-        if (!buffer.isEmpty()) {
-            rows.add(parseSingle(buffer.toString().trim(), index, defaultTimestamp));
+        for (int index = 0; index < messages.size(); index++) {
+            rows.add(parseSingle(messages.get(index), index, defaultTimestamp));
         }
         return rows;
     }
